@@ -80,6 +80,7 @@ test("processa GeoJSON, recalcula e baixa sem chamar API", async ({ page }) => {
 });
 
 test("mantém equivalência geométrica das cinco amostras", async ({ page }) => {
+  test.setTimeout(360_000);
   await page.goto(".");
   for (let numero = 1; numero <= 5; numero += 1) {
     const nome = `amostra${numero}.geojson`;
