@@ -1,5 +1,7 @@
 /* Processamento Python local para a versao estatica do GitHub Pages. */
 
+import { loadPyodide } from "../pyodide/pyodide.mjs";
+
 let pyodide = null;
 let browserApi = null;
 let inicializacao = null;
@@ -13,7 +15,6 @@ async function inicializar() {
   if (inicializacao) return inicializacao;
   inicializacao = (async () => {
     const indexURL = urlRelativa("../pyodide/").href;
-    importScripts(`${indexURL}pyodide.js`);
     pyodide = await loadPyodide({ indexURL });
     await pyodide.loadPackage(["numpy", "scipy", "shapely", "pyproj", "pandas", "geopandas", "fiona"]);
     const resposta = await fetch(urlRelativa("../python/patos_agro.zip"));

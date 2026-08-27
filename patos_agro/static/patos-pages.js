@@ -12,7 +12,7 @@
   }
 
   function criarWorker() {
-    const instancia = new Worker(new URL("processador.worker.js", scriptBase));
+    const instancia = new Worker(new URL("processador.worker.js", scriptBase), { type: "module" });
     instancia.onmessage = (evento) => {
       const chamada = pendentes.get(evento.data.id);
       if (!chamada) return;
@@ -21,8 +21,9 @@
       if (evento.data.ok) chamada.resolve(evento.data.resultado);
       else chamada.reject(new Error(evento.data.erro));
     };
-    instancia.onerror = () => {
-      const erro = new Error("Não foi possível iniciar o processamento local. Tente novamente.");
+    instancia.onerror = (evento) => {
+      const detalhe = evento.message ? ` (${evento.message})` : "";
+      const erro = new Error(`Não foi possível iniciar o processamento local. Tente novamente.${detalhe}`);
       pendentes.forEach(({ reject }) => reject(erro));
       pendentes.clear();
       operacaoPesada = null;

@@ -39,7 +39,9 @@ class TestBuildPages(unittest.TestCase):
         for operacao in ("init", "camadas", "processar", "reprocessar", "descartar"):
             self.assertIn(f'"{operacao}"', worker)
         self.assertIn("window.PatosPagesApi", adaptador)
-        self.assertIn("new Worker", adaptador)
+        self.assertIn('{ type: "module" }', adaptador)
+        self.assertIn('import { loadPyodide } from "../pyodide/pyodide.mjs"', worker)
+        self.assertNotIn("importScripts", worker)
 
 
 if __name__ == "__main__":

@@ -40,7 +40,13 @@ async function baixarResultado(page) {
 
 async function abrirArquivo(page, arquivo) {
   await page.locator("#file-input").setInputFiles(arquivo);
-  await expect(page.locator("#analysis-panel")).not.toHaveClass(/is-hidden/);
+  const resultado = await Promise.race([
+    page.waitForFunction(() => !document.querySelector("#analysis-panel").classList.contains("is-hidden"))
+      .then(() => null),
+    page.locator("#toast").waitFor({ state: "visible" })
+      .then(async () => page.locator("#toast").innerText()),
+  ]);
+  if (resultado) throw new Error(`Erro da aplicação: ${resultado}`);
 }
 
 test("processa GeoJSON, recalcula e baixa sem chamar API", async ({ page }) => {
