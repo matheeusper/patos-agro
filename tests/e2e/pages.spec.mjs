@@ -38,15 +38,23 @@ async function baixarResultado(page) {
   return JSON.parse(await fs.readFile(await download.path(), "utf8"));
 }
 
+async function aguardarResultado(page, seletor) {
+  const resultado = await page.waitForFunction((alvo) => {
+    const elemento = document.querySelector(alvo);
+    if (elemento && !elemento.classList.contains("is-hidden")) return { ok: true };
+    const toast = document.querySelector("#toast");
+    if (toast && toast.classList.contains("is-error") && !toast.classList.contains("is-hidden")) {
+      return { ok: false, erro: toast.textContent };
+    }
+    return null;
+  }, seletor, { timeout: 90_000 });
+  const estado = await resultado.jsonValue();
+  if (!estado.ok) throw new Error(`Erro da aplicação: ${estado.erro}`);
+}
+
 async function abrirArquivo(page, arquivo) {
   await page.locator("#file-input").setInputFiles(arquivo);
-  const resultado = await Promise.race([
-    page.waitForFunction(() => !document.querySelector("#analysis-panel").classList.contains("is-hidden"))
-      .then(() => null),
-    page.locator("#toast").waitFor({ state: "visible" })
-      .then(async () => page.locator("#toast").innerText()),
-  ]);
-  if (resultado) throw new Error(`Erro da aplicação: ${resultado}`);
+  await aguardarResultado(page, "#analysis-panel");
 }
 
 test("processa GeoJSON, recalcula e baixa sem chamar API", async ({ page }) => {
@@ -64,6 +72,7 @@ test("processa GeoJSON, recalcula e baixa sem chamar API", async ({ page }) => {
   await page.locator("#parameters-panel details summary").click();
   await page.locator("#parameter-min_pontos_fileira").fill("5");
   await expect(page.locator("#parameters-status")).toContainText("Atualizado em");
+  await page.locator("#inspector-tab-stage").click();
   await page.locator("#pin-reference-button").click();
   await expect(page.locator("#reference-mode-button")).toBeEnabled();
   expect(chamadasApi).toEqual([]);
@@ -83,7 +92,7 @@ test("mantém equivalência geométrica das cinco amostras", async ({ page }) =>
 test("lista somente camadas de pontos do GeoPackage", async ({ page }) => {
   await page.goto(".");
   await page.locator("#file-input").setInputFiles(path.join(raiz, ".cache/pages-tests/camadas.gpkg"));
-  await expect(page.locator("#layer-modal")).not.toHaveClass(/is-hidden/);
+  await aguardarResultado(page, "#layer-modal");
   await expect(page.locator("#layer-select option")).toHaveCount(2);
   await page.locator("#layer-select").selectOption("plantas_b");
   await page.locator("#layer-confirm-button").click();
