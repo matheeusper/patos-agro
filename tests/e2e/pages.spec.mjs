@@ -55,6 +55,7 @@ async function aguardarResultado(page, seletor) {
 async function abrirArquivo(page, arquivo) {
   await page.locator("#file-input").setInputFiles(arquivo);
   await aguardarResultado(page, "#analysis-panel");
+  await expect(page.locator("#loading-overlay")).toHaveClass(/is-hidden/);
 }
 
 test("processa GeoJSON, recalcula e baixa sem chamar API", async ({ page }) => {
