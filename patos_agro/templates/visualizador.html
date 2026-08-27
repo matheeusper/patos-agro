@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Reconstrua e inspecione fileiras de plantio a partir de pontos georreferenciados.">
+    <title>PatosAgro — Estação de reconstrução</title>
+    <link rel="icon" href="{{ url_for('static', filename='brand/favicon.svg') }}" type="image/svg+xml">
+    <script>
+      (() => {
+        try {
+          if (localStorage.getItem("patos-agro-tema") === "dark") document.documentElement.dataset.theme = "dark";
+        } catch (_error) {
+          // Preferências locais são opcionais.
+        }
+      })();
+    </script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='visualizador.css', v='9') }}">
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="command-bar">
+        <a class="brand" href="/" aria-label="PatosAgro — início">
+          <img class="brand-symbol" src="{{ url_for('static', filename='brand/patosagro-mark.svg') }}" alt="">
+          <span class="brand-copy"><strong>PatosAgro</strong><small>Estação de reconstrução</small></span>
+        </a>
+        <div class="command-status" aria-label="Status da aplicação">
+          <span class="status-light" aria-hidden="true"></span><span>Local</span><span class="command-status-detail">dados temporários</span>
+        </div>
+        <div class="command-actions">
+          <button class="command-button command-button-secondary" id="parameters-button" type="button" aria-expanded="false" aria-controls="inspector">Ajustes</button>
+          <button class="command-button command-button-secondary" id="reprocess-button" type="button" disabled>Reprocessar</button>
+          <button class="command-button command-button-secondary" id="download-button" type="button" disabled>Baixar</button>
+          <button class="icon-button" id="theme-toggle" type="button" aria-pressed="false" aria-label="Ativar modo escuro" title="Ativar modo escuro">
+            <span id="theme-toggle-icon" aria-hidden="true">☾</span><span class="sr-only" id="theme-toggle-label">Modo escuro</span>
+          </button>
+          <label class="command-button command-button-primary" for="file-input" role="button" tabindex="0">Abrir dados</label>
+          <input id="file-input" type="file" accept=".geojson,.gpkg" hidden>
+        </div>
+      </header>
+
+      <main class="main-surface">
+        <section class="landing" id="empty-state">
+          <div class="landing-copy">
+            <div class="coordinate-label" aria-hidden="true">22°43′S · 47°38′W</div>
+            <img class="landing-brand" src="{{ url_for('static', filename='brand/patosagro-logo.svg') }}" alt="PatosAgro — pato com espiga de trigo">
+            <p class="section-code">Reconstrução espacial / 01</p>
+            <h1>Do ponto bruto<br>à fileira <em>confiável.</em></h1>
+            <p class="landing-intro">Transforme levantamentos georreferenciados em fileiras inspecionáveis. Acompanhe cada decisão, compare resultados e ajuste o algoritmo sobre o próprio talhão.</p>
+            <label class="upload-console" id="dropzone" for="file-input" role="button" tabindex="0">
+              <span class="upload-console-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 17V4m0 0L7 9m5-5 5 5M5 14v5h14v-5"/></svg></span>
+              <span class="upload-console-copy"><strong>Abrir dados do talhão</strong><small>Arraste um GeoJSON ou GeoPackage · até 25 MB</small></span>
+              <span class="upload-console-action" aria-hidden="true">Selecionar →</span>
+            </label>
+            <div class="landing-facts" aria-label="Informações do processamento">
+              <span><strong>9</strong> etapas visíveis</span><span><strong>0</strong> uploads permanentes</span><span><strong>CRS</strong> saída EPSG:4326</span>
+            </div>
+          </div>
+
+          <div class="survey-window" aria-label="Demonstração visual: pontos sendo conectados em fileiras">
+            <div class="survey-ruler survey-ruler-top" aria-hidden="true"><span>00</span><span>25</span><span>50</span><span>75</span><span>100 m</span></div>
+            <div class="survey-ruler survey-ruler-side" aria-hidden="true"><span>A</span><span>B</span><span>C</span><span>D</span></div>
+            <svg class="survey-plot" viewBox="0 0 720 620" role="img" aria-label="Pontos dispersos se organizam em fileiras curvas">
+              <defs>
+                <pattern id="survey-grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" class="grid-line"/></pattern>
+                <filter id="survey-glow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="4" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+              </defs>
+              <rect width="720" height="620" class="survey-ground"/><rect width="720" height="620" fill="url(#survey-grid)"/>
+              <g class="survey-contours" aria-hidden="true"><path d="M-30 130C170 20 360 230 760 82"/><path d="M-20 480C170 370 360 590 760 440"/></g>
+              <g class="survey-rows" fill="none">
+                <path pathLength="1" d="M72 136C210 105 310 184 405 164S562 96 656 122"/><path pathLength="1" d="M62 221C195 182 300 274 402 242S564 171 666 204"/><path pathLength="1" d="M55 309C196 254 290 360 397 322S561 251 674 288"/><path pathLength="1" d="M50 399C183 338 291 446 398 405S573 329 680 373"/><path pathLength="1" d="M46 493C185 418 286 530 396 489S573 411 686 458"/>
+              </g>
+              <g class="survey-points" filter="url(#survey-glow)">
+                <circle cx="72" cy="136" r="4"/><circle cx="132" cy="126" r="4"/><circle cx="194" cy="127" r="4"/><circle cx="254" cy="149" r="4"/><circle cx="318" cy="171" r="4"/><circle cx="385" cy="168" r="4"/><circle cx="451" cy="148" r="4"/><circle cx="520" cy="120" r="4"/><circle cx="588" cy="108" r="4"/><circle cx="656" cy="122" r="4"/>
+                <circle cx="62" cy="221" r="4"/><circle cx="126" cy="205" r="4"/><circle cx="190" cy="201" r="4"/><circle cx="256" cy="223" r="4"/><circle cx="322" cy="253" r="4"/><circle cx="388" cy="246" r="4"/><circle cx="454" cy="220" r="4"/><circle cx="522" cy="191" r="4"/><circle cx="594" cy="185" r="4"/><circle cx="666" cy="204" r="4"/>
+                <circle cx="55" cy="309" r="4"/><circle cx="122" cy="282" r="4"/><circle cx="190" cy="286" r="4"/><circle cx="256" cy="321" r="4"/><circle cx="325" cy="344" r="4"/><circle cx="392" cy="325" r="4"/><circle cx="459" cy="296" r="4"/><circle cx="528" cy="268" r="4"/><circle cx="602" cy="265" r="4"/><circle cx="674" cy="288" r="4"/>
+                <circle cx="50" cy="399" r="4"/><circle cx="118" cy="369" r="4"/><circle cx="187" cy="376" r="4"/><circle cx="255" cy="411" r="4"/><circle cx="325" cy="430" r="4"/><circle cx="394" cy="408" r="4"/><circle cx="464" cy="377" r="4"/><circle cx="536" cy="347" r="4"/><circle cx="608" cy="349" r="4"/><circle cx="680" cy="373" r="4"/>
+                <circle cx="46" cy="493" r="4"/><circle cx="115" cy="456" r="4"/><circle cx="185" cy="467" r="4"/><circle cx="254" cy="501" r="4"/><circle cx="324" cy="514" r="4"/><circle cx="394" cy="490" r="4"/><circle cx="466" cy="458" r="4"/><circle cx="539" cy="429" r="4"/><circle cx="613" cy="434" r="4"/><circle cx="686" cy="458" r="4"/>
+              </g>
+              <g class="survey-focus" aria-hidden="true"><circle cx="398" cy="405" r="17"/><path d="M398 379v52M372 405h52"/></g>
+            </svg>
+            <div class="survey-readout" aria-hidden="true"><span><small>Leitura</small><strong>52 pontos</strong></span><span><small>Traçado</small><strong>5 fileiras</strong></span><span class="survey-live"><i></i> reconstruindo</span></div>
+          </div>
+        </section>
+
+        <section class="workstation is-hidden" id="analysis-panel">
+          <aside class="stage-rail" aria-label="Etapas do processamento">
+            <div class="stage-rail-heading"><span class="section-code">Processo</span><strong>9 etapas</strong></div>
+            <nav id="stage-menu" class="stage-menu"></nav>
+            <div class="file-card" id="file-card"><span class="file-icon" aria-hidden="true">GEO</span><div><strong>Nenhum arquivo</strong><small>GeoJSON ou GeoPackage</small></div></div>
+          </aside>
+
+          <section class="map-workspace" aria-label="Visualização geoespacial">
+            <header class="map-toolbar">
+              <div class="mode-switch" role="group" aria-label="Modo de visualização">
+                <button class="is-active" data-mode="single" type="button">Etapa</button><button data-mode="compare" type="button">Comparar</button><button data-mode="reference" id="reference-mode-button" type="button" disabled>Referência × atual</button>
+              </div>
+              <div class="map-toolbar-actions">
+                <label class="basemap-picker" for="basemap-select"><span>Mapa</span><select id="basemap-select" aria-label="Mapa-base: Ruas"><option value="streets">Ruas</option><option value="satellite">Satélite global</option><option value="hybrid">Satélite com rótulos</option><option value="aerial">Aéreo aberto</option><option value="topographic">Topográfico</option><option value="dark">Escuro</option><option value="neutral">Neutro</option></select></label>
+                <button class="map-toggle" id="basemap-toggle" type="button" aria-pressed="true" aria-label="Desativar mapa-base" title="Desativar mapa-base"><span id="basemap-toggle-icon" aria-hidden="true">▦</span><span id="basemap-toggle-label">Ocultar mapa</span></button>
+                <button class="map-toggle inspector-toggle" id="inspector-toggle" type="button" aria-expanded="false" aria-controls="inspector">Detalhes</button>
+              </div>
+            </header>
+            <div class="map-layout" id="map-layout">
+              <section class="map-panel"><div class="map-label" id="single-map-label">Etapa atual</div><div id="single-map" class="map"></div></section>
+              <section class="map-panel compare-panel"><div class="map-label" id="compare-left-label">Pontos originais</div><div id="compare-left-map" class="map"></div></section>
+              <section class="map-panel compare-panel"><div class="map-label" id="compare-right-label">Resultado final</div><div id="compare-right-map" class="map"></div></section>
+            </div>
+            <footer class="transport-bar" aria-label="Controles das etapas">
+              <span class="transport-position" id="transport-position">01 / 09</span>
+              <div class="playback-controls"><button id="restart-button" type="button" aria-label="Voltar à primeira etapa">↺</button><button id="previous-button" type="button">← Anterior</button><button class="play-button" id="play-button" type="button">▶ Reproduzir</button><button id="next-button" type="button">Próxima →</button></div>
+              <span class="transport-hint">Inspecione cada decisão</span>
+            </footer>
+          </section>
+
+          <aside class="inspector" id="inspector" aria-label="Inspetor da reconstrução">
+            <header class="inspector-header"><div><span class="section-code">Inspetor</span><strong>Leitura do talhão</strong></div><button class="inspector-close" id="inspector-close" type="button" aria-label="Fechar inspetor">×</button></header>
+            <div class="inspector-tabs" role="tablist" aria-label="Seções do inspetor"><button class="is-active" id="inspector-tab-stage" type="button" role="tab" aria-selected="true" aria-controls="inspector-panel-stage" tabindex="0" data-inspector-tab="stage">Etapa</button><button id="inspector-tab-layers" type="button" role="tab" aria-selected="false" aria-controls="inspector-panel-layers" tabindex="-1" data-inspector-tab="layers">Camadas</button><button id="inspector-tab-settings" type="button" role="tab" aria-selected="false" aria-controls="inspector-panel-settings" tabindex="-1" data-inspector-tab="settings">Ajustes</button></div>
+            <div class="inspector-scroll">
+              <section class="inspector-panel is-active" id="inspector-panel-stage" role="tabpanel" aria-labelledby="inspector-tab-stage" data-inspector-panel="stage">
+                <span class="stage-kicker" id="stage-kicker">Etapa 1 de 9</span><h1 id="stage-title">Pontos recebidos</h1><p class="stage-description" id="stage-description">Visualização dos pontos válidos usados pelo processamento.</p>
+                <div class="metrics" id="metrics" aria-live="polite"></div>
+                <div class="reference-card"><span class="section-code">Comparação</span><p id="reference-summary" aria-live="polite">Nenhuma referência fixada.</p><button class="text-button" id="pin-reference-button" type="button">Fixar resultado atual</button></div>
+              </section>
+              <section class="inspector-panel" id="inspector-panel-layers" role="tabpanel" aria-labelledby="inspector-tab-layers" data-inspector-panel="layers">
+                <div class="inspector-section-heading"><span class="section-code">Visibilidade</span><strong>Camadas da etapa</strong></div><div class="legend" id="legend"></div>
+                <div class="basemap-info"><span class="section-code">Contexto</span><p class="basemap-note" id="basemap-note" aria-live="polite">Ruas do OpenStreetMap.</p></div>
+              </section>
+              <section class="inspector-panel parameters-panel" id="parameters-panel" role="tabpanel" aria-labelledby="inspector-tab-settings" data-inspector-panel="settings">
+                <header class="parameters-header"><div><span class="section-code">Calibração</span><strong>Parâmetros</strong></div><button id="parameters-close" type="button" aria-label="Fechar ajustes">×</button></header>
+                <div class="parameters-status" id="parameters-status" aria-live="polite">Valores padrão</div>
+                <label class="preset-field" for="preset-select">Preset<select id="preset-select"><option value="padrao">Padrão</option><option value="conservador">Conservador</option><option value="flexivel">Flexível</option><option value="curvas_lacunas">Curvas e lacunas</option></select></label>
+                <div id="parameters-basic" class="parameters-fields"></div>
+                <details class="parameters-advanced"><summary>Controles avançados</summary><div id="parameters-advanced" class="parameters-fields"></div></details>
+                <footer class="parameters-actions"><button class="text-button" id="parameters-reset" type="button">Restaurar padrões</button><button class="text-button" id="parameters-export" type="button">Salvar JSON</button><label class="text-button" for="parameters-import" role="button" tabindex="0">Importar JSON</label><input id="parameters-import" type="file" accept="application/json,.json" hidden></footer>
+              </section>
+            </div>
+          </aside>
+        </section>
+      </main>
+
+      <div class="loading-overlay is-hidden" id="loading-overlay" aria-live="polite"><div class="loading-survey" aria-hidden="true"><span></span><span></span><span></span><span></span></div><span class="section-code">Processamento local</span><strong id="loading-title">Lendo o talhão</strong><small id="loading-detail">Validando pontos e calculando conexões…</small></div>
+      <div class="modal-backdrop is-hidden" id="layer-modal"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="layer-modal-title"><span class="section-code">GeoPackage</span><h2 id="layer-modal-title">Escolha a camada de pontos</h2><p>O arquivo contém mais de uma camada compatível. Selecione qual representa o levantamento.</p><label for="layer-select">Camada</label><select id="layer-select"></select><div class="modal-actions"><button class="command-button command-button-secondary" id="layer-cancel-button" type="button">Cancelar</button><button class="command-button command-button-primary" id="layer-confirm-button" type="button">Processar camada</button></div></section></div>
+      <div class="parameters-backdrop is-hidden" id="parameters-backdrop"></div>
+      <div class="toast is-hidden" id="toast" role="alert"></div>
+    </div>
+    <script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
+    <script src="{{ url_for('static', filename='visualizador.js', v='9') }}"></script>
+  </body>
+</html>
