@@ -65,7 +65,7 @@ jobs:
         run: |
           mkdir -p .cache/serve
           ln -s "$GITHUB_WORKSPACE/_site" .cache/serve/patos-agro
-          uv run python -m http.server 8765 --bind 127.0.0.1 --directory .cache/serve > .cache/pages-server.log 2>&1 &
+          .venv/bin/python -m http.server 8765 --bind 127.0.0.1 --directory .cache/serve > .cache/pages-server.log 2>&1 &
 
       - name: Testar Pages em Chromium e Firefox
         env:
