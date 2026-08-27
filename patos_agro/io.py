@@ -33,6 +33,12 @@ def carregar_dados_pontos(caminho_entrada, camada=None, engine=None):
     except Exception as erro:
         raise ErroEntrada(f"não foi possível ler o arquivo de entrada: {entrada}") from erro
 
+    return preparar_dados_pontos(pontos, camada=camada)
+
+
+def preparar_dados_pontos(pontos, camada=None):
+    """Valida e projeta um GeoDataFrame de pontos já carregado."""
+
     if pontos.empty:
         raise ErroEntrada("o arquivo de entrada não contém pontos")
     if pontos.crs is None:

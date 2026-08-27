@@ -1,14 +1,16 @@
 """Ponte JSON usada pelo worker Pyodide da versao GitHub Pages."""
 
 import json
+import sqlite3
 import time
 import uuid
 from dataclasses import dataclass
 
-import fiona
+import geopandas as gpd
+from shapely import wkb
 
 from patos_agro.erros import ErroPatosAgro, ErroEntrada, ErroProcessamento
-from patos_agro.io import carregar_dados_pontos
+from patos_agro.io import carregar_dados_pontos, preparar_dados_pontos
 from patos_agro.parametros import esquema_parametros, parametros_de_dict
 from patos_agro.reconstrucao import reconstruir_com_diagnostico
 from patos_agro.visualizacao import criar_resposta_visualizacao
@@ -44,18 +46,68 @@ def obter_parametros():
     return _executar(esquema_parametros)
 
 
-def _tipo_geometria(caminho, camada):
-    with fiona.open(caminho, layer=camada) as colecao:
-        return str(colecao.schema.get("geometry") or "Unknown")
+def _identificador_sql(nome):
+    return '"' + str(nome).replace('"', '""') + '"'
+
+
+def _camadas_geopackage(caminho):
+    with sqlite3.connect(caminho) as banco:
+        return banco.execute(
+            "SELECT table_name, column_name, geometry_type_name, srs_id "
+            "FROM gpkg_geometry_columns ORDER BY rowid"
+        ).fetchall()
+
+
+def _geometria_geopackage(valor):
+    conteudo = bytes(valor)
+    if len(conteudo) < 8 or conteudo[:2] != b"GP":
+        raise ValueError("cabeçalho GeoPackage inválido")
+    indicador_envelope = (conteudo[3] >> 1) & 0b111
+    tamanhos_envelope = {0: 0, 1: 32, 2: 48, 3: 48, 4: 64}
+    if indicador_envelope not in tamanhos_envelope:
+        raise ValueError("envelope GeoPackage inválido")
+    inicio_wkb = 8 + tamanhos_envelope[indicador_envelope]
+    return wkb.loads(conteudo[inicio_wkb:])
+
+
+def _crs_geopackage(banco, srs_id):
+    linha = banco.execute(
+        "SELECT organization, organization_coordsys_id, definition "
+        "FROM gpkg_spatial_ref_sys WHERE srs_id = ?",
+        (srs_id,),
+    ).fetchone()
+    if linha is None:
+        return None
+    organizacao, codigo, definicao = linha
+    if str(organizacao).upper() == "EPSG" and int(codigo) > 0:
+        return f"EPSG:{codigo}"
+    if definicao and str(definicao).lower() != "undefined":
+        return definicao
+    return None
+
+
+def _ler_geopackage(caminho, camada):
+    camadas = _camadas_geopackage(caminho)
+    selecionada = next((dados for dados in camadas if dados[0] == camada), None)
+    if selecionada is None:
+        raise ErroEntrada("a camada selecionada não existe no GeoPackage")
+    tabela, coluna_geometria, _tipo, srs_id = selecionada
+    consulta = f"SELECT {_identificador_sql(coluna_geometria)} FROM {_identificador_sql(tabela)}"
+    with sqlite3.connect(caminho) as banco:
+        geometrias = [
+            None if linha[0] is None else _geometria_geopackage(linha[0])
+            for linha in banco.execute(consulta)
+        ]
+        crs = _crs_geopackage(banco, srs_id)
+    return gpd.GeoDataFrame(geometry=geometrias, crs=crs)
 
 
 def listar_camadas(caminho):
     def operacao():
         try:
-            nomes = fiona.listlayers(caminho)
             camadas = []
-            for nome in nomes:
-                tipo = _tipo_geometria(caminho, nome)
+            for nome, _coluna, tipo, _srs_id in _camadas_geopackage(caminho):
+                tipo = str(tipo or "Unknown")
                 tipo_normalizado = tipo.lower().replace("3d ", "")
                 if tipo_normalizado.startswith("point"):
                     camadas.append({"nome": str(nome), "tipo": tipo})
@@ -83,7 +135,11 @@ def _processar_dados(dados, nome, parametros, sessao_id=None):
 def processar(caminho, nome, camada, parametros_json):
     def operacao():
         parametros = parametros_de_dict(json.loads(parametros_json) if parametros_json else None)
-        dados = carregar_dados_pontos(caminho, camada=camada or None, engine="fiona")
+        if str(nome).lower().endswith(".gpkg"):
+            pontos = _ler_geopackage(caminho, camada)
+            dados = preparar_dados_pontos(pontos, camada=camada)
+        else:
+            dados = carregar_dados_pontos(caminho, camada=camada or None, engine="fiona")
         sessao_id = uuid.uuid4().hex
         _sessoes.clear()
         _sessoes[sessao_id] = _Sessao(dados, nome)
