@@ -1,0 +1,94 @@
+name: Testar e publicar GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+      - feat/github-pages-pyodide
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: "3.14"
+
+      - name: Instalar dependências Python
+        run: |
+          uv venv
+          uv pip install -r requirements.txt
+
+      - name: Testar aplicação Python
+        run: uv run python -m unittest discover -s tests -v
+
+      - name: Restaurar runtime Pyodide
+        id: cache-pyodide
+        uses: actions/cache@v4
+        with:
+          path: .cache/pyodide
+          key: pyodide-314.0.6-fd25b215
+
+      - name: Baixar runtime Pyodide
+        if: steps.cache-pyodide.outputs.cache-hit != 'true'
+        run: uv run python scripts/fetch_pyodide.py --output .cache/pyodide
+
+      - name: Montar site estático
+        run: uv run python scripts/build_pages.py --runtime .cache/pyodide
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Instalar navegadores de teste
+        run: |
+          npm install
+          npx playwright install --with-deps chromium firefox
+
+      - name: Preparar GeoPackage de teste
+        run: uv run python tests/preparar_fixture_pages.py --output .cache/pages-tests/camadas.gpkg
+
+      - name: Servir site no subcaminho do Pages
+        run: |
+          mkdir -p .cache/serve
+          ln -s "$GITHUB_WORKSPACE/_site" .cache/serve/patos-agro
+          uv run python -m http.server 8765 --bind 127.0.0.1 --directory .cache/serve > .cache/pages-server.log 2>&1 &
+
+      - name: Testar Pages em Chromium e Firefox
+        env:
+          PATOS_PAGES_URL: http://127.0.0.1:8765/patos-agro/
+        run: npm run test:pages
+
+      - name: Configurar GitHub Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Enviar artefato Pages
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    steps:
+      - name: Publicar
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -380,6 +380,7 @@ function updateFileCard(file, layer = null) {
 }
 
 async function requestJson(url, formData) {
+  if (window.PatosPagesApi) return window.PatosPagesApi.enviarFormulario(url, formData);
   if (state.requestController) state.requestController.abort();
   state.requestController = new AbortController();
   let response;
@@ -399,6 +400,9 @@ async function requestJson(url, formData) {
 }
 
 async function requestJsonBody(url, body) {
+  if (window.PatosPagesApi && url === "/api/reprocessar") {
+    return window.PatosPagesApi.reprocessar(body);
+  }
   let response;
   try {
     response = await fetch(url, {
@@ -476,7 +480,8 @@ async function processFile() {
     state.parameters = payload.parametros;
     renderParameterFields();
     if (previousSession && previousSession !== state.sessionId) {
-      fetch(`/api/sessoes/${encodeURIComponent(previousSession)}`, { method: "DELETE" }).catch(() => {});
+      if (window.PatosPagesApi) window.PatosPagesApi.descartar(previousSession);
+      else fetch(`/api/sessoes/${encodeURIComponent(previousSession)}`, { method: "DELETE" }).catch(() => {});
     }
     state.stageIndex = 0;
     state.hiddenLayers.clear();
@@ -970,9 +975,13 @@ async function importParameters(file) {
 
 async function initializeParameters() {
   try {
-    const response = await fetch("/api/parametros");
-    if (!response.ok) throw new Error();
-    state.parameterSchema = await response.json();
+    if (window.PatosPagesApi) {
+      state.parameterSchema = await window.PatosPagesApi.obterParametros();
+    } else {
+      const response = await fetch("/api/parametros");
+      if (!response.ok) throw new Error();
+      state.parameterSchema = await response.json();
+    }
     let stored = null;
     try { stored = JSON.parse(readPreference(STORAGE_KEYS.parameters)); } catch (_error) { stored = null; }
     state.parameters = validateParameterObject(stored?.versao === 1 ? stored.parametros : state.parameterSchema.padrao);
@@ -1069,6 +1078,8 @@ elements.layerConfirmButton.addEventListener("click", () => {
   processFile();
 });
 window.addEventListener("beforeunload", () => {
-  if (state.sessionId) fetch(`/api/sessoes/${encodeURIComponent(state.sessionId)}`, { method: "DELETE", keepalive: true }).catch(() => {});
+  if (!state.sessionId) return;
+  if (window.PatosPagesApi) window.PatosPagesApi.descartar(state.sessionId);
+  else fetch(`/api/sessoes/${encodeURIComponent(state.sessionId)}`, { method: "DELETE", keepalive: true }).catch(() => {});
 });
 window.addEventListener("resize", refreshLayoutState);

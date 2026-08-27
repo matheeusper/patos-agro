@@ -113,6 +113,19 @@ Na conexão de falhas longas em fileiras curvas, o algoritmo testa pontes cúbic
 
 O Leaflet é carregado a partir dos arquivos incluídos no projeto, então pontos, linhas e controles continuam funcionando sem internet. O seletor global permite usar ruas do OpenStreetMap, satélite Sentinel-2, satélite com rótulos, imagens aéreas abertas, terreno, mapa escuro ou fundo neutro. A escolha e o estado ativado/desativado ficam salvos separadamente no navegador e valem para os três mapas.
 
+## GitHub Pages
+
+O visualizador também possui uma distribuição totalmente estática. Nela, o mesmo pacote Python é executado em um Web Worker por meio do Pyodide/WebAssembly; os arquivos permanecem no navegador e nenhuma rota `/api` ou servidor Flask é utilizada. GeoJSON, GeoPackage, seleção de camadas, reprocessamento, comparação e download continuam disponíveis.
+
+Para montar o artefato local com `uv`:
+
+```bash
+uv run python scripts/fetch_pyodide.py --output .cache/pyodide
+uv run python scripts/build_pages.py --runtime .cache/pyodide
+```
+
+O resultado fica em `_site/`. O runtime Pyodide 314.0.6 é validado por SHA-256 e somente o fechamento de dependências geoespaciais necessário é copiado ao site. O workflow `.github/workflows/pages.yml` executa a suíte Python, testa a versão WebAssembly em Chromium e Firefox sob o subcaminho `/patos-agro/` e publica o artefato no GitHub Pages.
+
 As camadas Sentinel-2, híbrida e topográfica são fornecidas pela EOX para uso não comercial. Elas possuem resolução aproximada de 10 m e servem principalmente como contexto territorial. O modo aéreo usa o OpenAerialMap a partir do zoom 14, mantendo o OpenStreetMap por baixo porque a cobertura de imagens varia conforme a região. Todos os mapas-base dependem de internet; quando um provedor falha, as geometrias continuam disponíveis sobre o mapa de ruas ou o fundo neutro.
 
 ## Valores heurísticos

@@ -146,6 +146,7 @@
       <div class="toast is-hidden" id="toast" role="alert"></div>
     </div>
     <script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
+    {% if pages_mode %}<script src="{{ url_for('static', filename='patos-pages.js', v='1') }}"></script>{% endif %}
     <script src="{{ url_for('static', filename='visualizador.js', v='9') }}"></script>
   </body>
 </html>

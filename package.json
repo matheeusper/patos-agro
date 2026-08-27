@@ -1,0 +1,10 @@
+{
+  "name": "patos-agro-pages-tests",
+  "private": true,
+  "devDependencies": {
+    "@playwright/test": "1.55.0"
+  },
+  "scripts": {
+    "test:pages": "playwright test"
+  }
+}

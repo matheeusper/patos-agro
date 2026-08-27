@@ -20,13 +20,15 @@ class DadosPontos:
 
 
 # Lê os pontos, remove duplicados e converte as coordenadas para UTM.
-def carregar_dados_pontos(caminho_entrada, camada=None):
+def carregar_dados_pontos(caminho_entrada, camada=None, engine=None):
     entrada = Path(caminho_entrada)
     if not entrada.is_file():
         raise ErroEntrada(f"arquivo de entrada não encontrado: {entrada}")
 
     try:
         argumentos = {"layer": camada} if camada else {}
+        if engine:
+            argumentos["engine"] = engine
         pontos = gpd.read_file(entrada, **argumentos)
     except Exception as erro:
         raise ErroEntrada(f"não foi possível ler o arquivo de entrada: {entrada}") from erro
